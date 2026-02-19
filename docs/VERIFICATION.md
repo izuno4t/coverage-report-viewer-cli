@@ -17,13 +17,13 @@
 
 ## NF-02 対応OSビルド確認
 
-- コマンド: `GOOS=darwin GOARCH=arm64 go build -o /tmp/jrv-darwin-arm64 ./cmd/jrv`
+- コマンド: `GOOS=darwin GOARCH=arm64 go build -o /tmp/crv-darwin-arm64 ./cmd/crv`
 - 結果: 成功
 
-- コマンド: `GOOS=darwin GOARCH=amd64 go build -o /tmp/jrv-darwin-amd64 ./cmd/jrv`
+- コマンド: `GOOS=darwin GOARCH=amd64 go build -o /tmp/crv-darwin-amd64 ./cmd/crv`
 - 結果: 成功
 
-- コマンド: `GOOS=linux GOARCH=amd64 go build -o /tmp/jrv-linux-amd64 ./cmd/jrv`
+- コマンド: `GOOS=linux GOARCH=amd64 go build -o /tmp/crv-linux-amd64 ./cmd/crv`
 - 結果: 成功
 
 ## 補足

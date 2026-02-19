@@ -1,5 +1,5 @@
-APP := jrv
-CMD := ./cmd/jrv
+APP := crv
+CMD := ./cmd/crv
 OUT := ./bin/$(APP)
 
 .PHONY: help run build test test-perf lint-md fmt tidy verify build-darwin-arm64 build-darwin-amd64 build-linux-amd64
@@ -7,7 +7,7 @@ OUT := ./bin/$(APP)
 help:
 	@echo "Available targets:"
 	@echo "  make run                # run locally"
-	@echo "  make build              # build ./bin/jrv"
+	@echo "  make build              # build ./bin/crv"
 	@echo "  make test               # run all tests"
 	@echo "  make test-perf          # run JaCoCo parser perf test"
 	@echo "  make lint-md            # lint markdown files"

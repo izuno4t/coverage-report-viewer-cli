@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/izuno4t/jacoco-report-viewer-cli/internal/app"
+	"github.com/izuno4t/coverage-report-viewer-cli/internal/app"
 )
 
 var version = "dev"

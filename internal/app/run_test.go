@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/izuno4t/jacoco-report-viewer-cli/internal/jacoco"
-	"github.com/izuno4t/jacoco-report-viewer-cli/internal/tui"
+	"github.com/izuno4t/coverage-report-viewer-cli/internal/jacoco"
+	"github.com/izuno4t/coverage-report-viewer-cli/internal/tui"
 )
 
 func TestRunVersion(t *testing.T) {
@@ -18,7 +18,7 @@ func TestRunVersion(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected 0, got %d", code)
 	}
-	if out.String() != "jrv 1.2.3\n" {
+	if out.String() != "crv 1.2.3\n" {
 		t.Fatalf("unexpected version output: %q", out.String())
 	}
 }

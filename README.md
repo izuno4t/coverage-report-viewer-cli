@@ -1,4 +1,4 @@
-# JaCoCo Report Viewer CLI (`jrv`)
+# Coverage Report Viewer (`crv`)
 
 JaCoCo XML レポートをターミナル上でインタラクティブに閲覧する CLI ツールです。  
 ブラウザに切り替えず、階層をドリルダウンしてカバレッジを確認できます。
@@ -16,20 +16,20 @@ JaCoCo XML レポートをターミナル上でインタラクティブに閲覧
 ### Homebrew
 
 ```bash
-brew tap ochyai/homebrew-jrv
-brew install jrv
+brew tap ochyai/homebrew-crv
+brew install crv
 ```
 
 ### go install
 
 ```bash
-go install github.com/izuno4t/jacoco-report-viewer-cli/cmd/jrv@latest
+go install github.com/izuno4t/coverage-report-viewer-cli/cmd/crv@latest
 ```
 
 ## 使い方
 
 ```bash
-jrv [options] [path]
+crv [options] [path]
 ```
 
 - `path`: JaCoCo XML レポートのパス（省略時は自動検出）
@@ -60,7 +60,7 @@ make test-perf
 make lint-md
 ```
 
-- `make build`: `./bin/jrv` をビルド
+- `make build`: `./bin/crv` をビルド
 - `make test`: 全テスト実行（`go test ./...`）
 - `make test-perf`: パーサ性能テスト実行
 - `make lint-md`: Markdown lint 実行

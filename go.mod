@@ -1,4 +1,4 @@
-module github.com/izuno4t/jacoco-report-viewer-cli
+module github.com/izuno4t/coverage-report-viewer-cli
 
 go 1.22
 

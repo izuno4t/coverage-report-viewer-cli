@@ -34,7 +34,7 @@ func Parse(args []string) (Options, error) {
 		Sort:      defaultSort,
 	}
 
-	fs := flag.NewFlagSet("jrv", flag.ContinueOnError)
+	fs := flag.NewFlagSet("crv", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 
 	var helpShort bool
@@ -81,7 +81,7 @@ func Parse(args []string) (Options, error) {
 
 func Usage() string {
 	return strings.TrimSpace(`Usage:
-  jrv [options] [path]
+  crv [options] [path]
 
 Options:
   -t, --threshold <n>  カバレッジ閾値（0-100, default: 80）

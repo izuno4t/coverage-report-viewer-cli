@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/izuno4t/jacoco-report-viewer-cli/internal/jacoco"
+	"github.com/izuno4t/coverage-report-viewer-cli/internal/jacoco"
 )
 
 type Config struct {

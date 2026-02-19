@@ -5,10 +5,10 @@ import (
 	"io"
 	"os"
 
-	"github.com/izuno4t/jacoco-report-viewer-cli/internal/cli"
-	"github.com/izuno4t/jacoco-report-viewer-cli/internal/jacoco"
-	"github.com/izuno4t/jacoco-report-viewer-cli/internal/reportpath"
-	"github.com/izuno4t/jacoco-report-viewer-cli/internal/tui"
+	"github.com/izuno4t/coverage-report-viewer-cli/internal/cli"
+	"github.com/izuno4t/coverage-report-viewer-cli/internal/jacoco"
+	"github.com/izuno4t/coverage-report-viewer-cli/internal/reportpath"
+	"github.com/izuno4t/coverage-report-viewer-cli/internal/tui"
 )
 
 var startUI = tui.Start
@@ -27,7 +27,7 @@ func Run(args []string, version string, out io.Writer, errOut io.Writer) int {
 		return 0
 	}
 	if opts.ShowVersion {
-		_, _ = fmt.Fprintf(out, "jrv %s\n", version)
+		_, _ = fmt.Fprintf(out, "crv %s\n", version)
 		return 0
 	}
 
@@ -61,6 +61,6 @@ func Run(args []string, version string, out io.Writer, errOut io.Writer) int {
 		return 1
 	}
 
-	_, _ = fmt.Fprintln(out, "jrv finished")
+	_, _ = fmt.Fprintln(out, "crv finished")
 	return 0
 }

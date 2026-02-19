@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/izuno4t/jacoco-report-viewer-cli/internal/jacoco"
+	"github.com/izuno4t/coverage-report-viewer-cli/internal/jacoco"
 )
 
 func sampleReport() jacoco.Report {

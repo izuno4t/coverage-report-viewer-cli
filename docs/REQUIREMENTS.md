@@ -1,4 +1,4 @@
-# JaCoCo Report Viewer (jrv) — 要件定義書
+# Coverage Report Viewer (crv) — 要件定義書
 
 JaCoCo カバレッジレポート ターミナルナビゲータ
 
@@ -8,7 +8,7 @@ JaCoCo カバレッジレポート ターミナルナビゲータ
 
 ### 1.1 プロジェクト概要
 
-jrv は、JaCoCo が出力する XML カバレッジレポートをターミナル上でインタラクティブに閲覧するための CLI ツールである。HTML レポートをブラウザで開く代わりに、ターミナル上でリンクをたどるようにドリルダウンしながらカバレッジ情報を確認できる。
+crv は、JaCoCo が出力する XML カバレッジレポートをターミナル上でインタラクティブに閲覧するための CLI ツールである。HTML レポートをブラウザで開く代わりに、ターミナル上でリンクをたどるようにドリルダウンしながらカバレッジ情報を確認できる。
 
 ### 1.2 背景と動機
 
@@ -40,7 +40,7 @@ JaCoCo は Java プロジェクトにおけるコードカバレッジ計測の�
 
 **受け入れ条件:**
 
-- `jrv` を実行するとカバレッジレポートが表示される
+- `crv` を実行するとカバレッジレポートが表示される
 - Maven プロジェクトルートで実行した場合、`pom.xml` から JaCoCo プラグインの設定を読み取り、レポートパスを自動解決する
 - `pom.xml` が見つからない、または JaCoCo プラグインが未設定の場合は既知のデフォルトパスにフォールバックする
 - XML が見つからない場合、エラーメッセージとヒントを表示する
@@ -274,17 +274,17 @@ Method:       92.0%  ██████████████████░�
 | NF-05 | 配布 | Homebrew および `go install` の 2 経路で配布すること |
 | NF-06 | JaCoCo バージョン | 0.8.x 系の XML スキーマに対応 |
 | NF-07 | バイナリサイズ | シングルバイナリ、ランタイム依存なし |
-| NF-08 | 命名整合性 | JaCoCo専用名称から将来の多言語対応に整合する製品名へ移行計画を持つこと |
+| NF-08 | 命名整合性 | 製品名・CLI名・配布名が `Coverage Report Viewer` / `crv` で一貫していること |
 
 ### 4.1 配布方式
 
 #### Homebrew
 
 ```bash
-brew install jrv
+brew install crv
 ```
 
-- Homebrew Tap (`homebrew-jrv`) を提供する
+- Homebrew Tap (`homebrew-crv`) を提供する
 - GoReleaser で GitHub Releases へのバイナリ公開と Homebrew Formula の自動生成を行う
 - macOS (arm64 / x86_64)、Linux (x86_64) 向けにクロスコンパイルする
 - ユーザー環境にランタイム依存なし
@@ -292,7 +292,7 @@ brew install jrv
 #### go install
 
 ```bash
-go install github.com/<owner>/jrv@latest
+go install github.com/<owner>/crv@latest
 ```
 
 - Go ツールチェインがある環境向けの配布経路
@@ -302,7 +302,7 @@ go install github.com/<owner>/jrv@latest
 ## 5. コマンドラインインターフェース
 
 ```text
-jrv [options] [path]
+crv [options] [path]
 ```
 
 ### 引数
@@ -335,14 +335,13 @@ jrv [options] [path]
 | FUT-06 | Watch モード | XML の変更を監視して自動更新 |
 | FUT-07 | Python対応 | `coverage.py` 由来の Cobertura XML を取り込み表示する |
 | FUT-08 | Rust対応 | LCOV 等を取り込み表示する |
-| FUT-09 | リネーム対応 | プロダクト名・CLI名・配布名をJaCoCo専用から汎用名へ移行する |
+| FUT-09 | 旧名称互換 | `jrv` から `crv` への移行期における互換案内・互換手段を提供する |
 
-### 6.1 命名移行ポリシー（将来）
+### 6.1 命名ポリシー
 
-- 現名称（`JaCoCo Report Viewer CLI`, `jrv`）はM1では維持する。
-- 多言語入力（Cobertura/LCOV）を正式サポートする時点で、名称変更を実施する。
-- 変更対象はリポジトリ名、CLI名、Homebrewパッケージ名、README/要件書の表記とする。
-- 互換期間中は旧コマンド名の案内またはエイリアス提供を行う。
+- 正式名称は `Coverage Report Viewer`、CLI名は `crv` とする。
+- 変更対象（リポジトリ名、CLI名、Homebrewパッケージ名、README/要件書）の表記は本名称に統一する。
+- 互換期間を設ける場合は、旧コマンド名 `jrv` の案内またはエイリアス提供方針を明示する。
 
 ---
 
@@ -364,3 +363,4 @@ jrv [options] [path]
 |---|---|---|
 | 0.1 | 2025-02-19 | 初版作成 |
 | 0.2 | 2026-02-19 | 将来要件にCobertura/LCOV入力と命名移行ポリシーを追加 |
+| 0.3 | 2026-02-19 | 製品名/CLI名を Coverage Report Viewer / crv に更新 |
