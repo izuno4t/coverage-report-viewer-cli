@@ -101,6 +101,55 @@ func TestRunAutoDetectsReportPath(t *testing.T) {
 	}
 }
 
+func TestRunAutoDetectsAndMergesMultiModuleReports(t *testing.T) {
+	dir := t.TempDir()
+	rootPom := `<project><modules><module>module-a</module><module>module-b</module></modules></project>`
+	modulePom := `<project><build><plugins><plugin><groupId>org.jacoco</groupId><artifactId>jacoco-maven-plugin</artifactId></plugin></plugins></build></project>`
+	write := func(path, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir failed: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write failed: %v", err)
+		}
+	}
+	write(filepath.Join(dir, "pom.xml"), rootPom)
+	write(filepath.Join(dir, "module-a/pom.xml"), modulePom)
+	write(filepath.Join(dir, "module-b/pom.xml"), modulePom)
+	write(filepath.Join(dir, "module-a/target/site/jacoco/jacoco.xml"), `<report name="a"><package name="pkg.a"><class name="A"><method name="f" desc="()V"><counter type="INSTRUCTION" missed="1" covered="9"/></method><counter type="INSTRUCTION" missed="1" covered="9"/></class><counter type="INSTRUCTION" missed="1" covered="9"/></package><counter type="INSTRUCTION" missed="1" covered="9"/></report>`)
+	write(filepath.Join(dir, "module-b/target/site/jacoco/jacoco.xml"), `<report name="b"><package name="pkg.b"><class name="B"><method name="g" desc="()V"><counter type="INSTRUCTION" missed="2" covered="8"/></method><counter type="INSTRUCTION" missed="2" covered="8"/></class><counter type="INSTRUCTION" missed="2" covered="8"/></package><counter type="INSTRUCTION" missed="2" covered="8"/></report>`)
+
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd failed: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	origStartUI := startUI
+	t.Cleanup(func() {
+		startUI = origStartUI
+	})
+	startUI = func(report jacoco.Report, _ tui.Config) error {
+		if len(report.Packages) != 2 {
+			t.Fatalf("expected merged package count=2, got=%d", len(report.Packages))
+		}
+		return nil
+	}
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run([]string{}, "dev", &out, &errOut)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d (stderr=%q)", code, errOut.String())
+	}
+}
+
 func TestRunFailsWhenUIFails(t *testing.T) {
 	dir := t.TempDir()
 	reportPath := filepath.Join(dir, "sample.xml")
@@ -148,5 +197,114 @@ func TestRunFailsOnInvalidXML(t *testing.T) {
 	}
 	if errOut.Len() == 0 {
 		t.Fatal("error output should not be empty")
+	}
+}
+
+func TestRunWatchModeUsesWatchUI(t *testing.T) {
+	dir := t.TempDir()
+	reportPath := filepath.Join(dir, "sample.xml")
+	if err := os.WriteFile(reportPath, []byte("<report name=\"x\"/>"), 0o644); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+
+	origStartUI := startUI
+	origStartUIWatch := startUIWatch
+	t.Cleanup(func() {
+		startUI = origStartUI
+		startUIWatch = origStartUIWatch
+	})
+
+	startUI = func(_ jacoco.Report, _ tui.Config) error {
+		t.Fatal("startUI should not be called in watch mode")
+		return nil
+	}
+	called := false
+	startUIWatch = func(report jacoco.Report, cfg tui.Config, reloadFn func() (jacoco.Report, error)) error {
+		called = true
+		if !cfg.Watch {
+			t.Fatal("watch config should be true")
+		}
+		r, err := reloadFn()
+		if err != nil {
+			t.Fatalf("reload failed: %v", err)
+		}
+		if r.Name != report.Name {
+			t.Fatalf("reload report mismatch: got=%s want=%s", r.Name, report.Name)
+		}
+		return nil
+	}
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run([]string{"--watch", reportPath}, "dev", &out, &errOut)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d (stderr=%q)", code, errOut.String())
+	}
+	if !called {
+		t.Fatal("watch UI should be called")
+	}
+}
+
+func TestRunWithFormatCobertura(t *testing.T) {
+	dir := t.TempDir()
+	reportPath := filepath.Join(dir, "coverage.xml")
+	content := `<coverage><packages><package name="pkg"><classes><class name="pkg.A" filename="pkg/A.py"><methods><method name="f" signature="()"><lines><line number="1" hits="1" branch="false"/></lines></method></methods></class></classes></package></packages></coverage>`
+	if err := os.WriteFile(reportPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+
+	origStartUI := startUI
+	t.Cleanup(func() {
+		startUI = origStartUI
+	})
+	called := false
+	startUI = func(report jacoco.Report, _ tui.Config) error {
+		called = true
+		if len(report.Packages) != 1 {
+			t.Fatalf("unexpected package count: %d", len(report.Packages))
+		}
+		return nil
+	}
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run([]string{"--format", "cobertura", reportPath}, "dev", &out, &errOut)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d (stderr=%q)", code, errOut.String())
+	}
+	if !called {
+		t.Fatal("startUI should be called")
+	}
+}
+
+func TestRunWithFormatLCOV(t *testing.T) {
+	dir := t.TempDir()
+	reportPath := filepath.Join(dir, "coverage.info")
+	content := "TN:\nSF:src/main.py\nDA:1,1\nend_of_record\n"
+	if err := os.WriteFile(reportPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+
+	origStartUI := startUI
+	t.Cleanup(func() {
+		startUI = origStartUI
+	})
+	called := false
+	startUI = func(report jacoco.Report, _ tui.Config) error {
+		called = true
+		if report.Name != "lcov" {
+			t.Fatalf("unexpected report name: %s", report.Name)
+		}
+		return nil
+	}
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := Run([]string{"--format", "lcov", reportPath}, "dev", &out, &errOut)
+	if code != 0 {
+		t.Fatalf("expected 0, got %d (stderr=%q)", code, errOut.String())
+	}
+	if !called {
+		t.Fatal("startUI should be called")
 	}
 }

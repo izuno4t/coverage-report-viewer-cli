@@ -8,6 +8,10 @@ import (
 	"github.com/izuno4t/coverage-report-viewer-cli/internal/jacoco"
 )
 
+func hasANSI(s string) bool {
+	return strings.Contains(s, "\x1b[")
+}
+
 func sampleReport() jacoco.Report {
 	return jacoco.Report{
 		Name:     "demo",
@@ -31,7 +35,7 @@ func TestViewIncludesSections(t *testing.T) {
 	m := NewModel(sampleReport(), Config{Threshold: 80, Sort: "name"})
 	view := m.View()
 
-	for _, want := range []string{"Report(demo)", "Summary", "Children", "com/example"} {
+	for _, want := range []string{"Report(demo)", "Summary (counter: instruction)", "Children", "com/example", "c: counter", "/: filter", "g/G: jump"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view missing %q", want)
 		}
@@ -62,6 +66,36 @@ func TestDrillDownAndBack(t *testing.T) {
 	}
 }
 
+func TestMethodDisplayNameIncludesSignatureAndLine(t *testing.T) {
+	report := jacoco.Report{
+		Packages: []jacoco.Package{{
+			Name: "pkg",
+			Classes: []jacoco.Class{{
+				Name: "C",
+				Methods: []jacoco.Method{{
+					Name: "find",
+					Desc: "(I)Ljava/lang/String;",
+					Line: 42,
+					Counters: []jacoco.Counter{
+						{Type: jacoco.CounterInstruction, Missed: 1, Covered: 9},
+					},
+				}},
+			}},
+		}},
+	}
+	m := NewModel(report, Config{Sort: "name"})
+	m.applyKey("enter")
+	m.applyKey("enter")
+
+	rows := m.currentChildren()
+	if len(rows) != 1 {
+		t.Fatalf("method row count mismatch: %d", len(rows))
+	}
+	if rows[0].name != "find(I)Ljava/lang/String;:42" {
+		t.Fatalf("unexpected method label: %q", rows[0].name)
+	}
+}
+
 func TestBarWidth(t *testing.T) {
 	got := bar(50, 10)
 	if got != "█████░░░░░" {
@@ -85,6 +119,25 @@ func TestSortCycle(t *testing.T) {
 	m.applyKey("s")
 	if m.sortID != "name-asc" {
 		t.Fatalf("unexpected sort after third toggle: %s", m.sortID)
+	}
+}
+
+func TestCounterTypeCycle(t *testing.T) {
+	m := NewModel(sampleReport(), Config{Sort: "name"})
+	if m.counterType != jacoco.CounterInstruction {
+		t.Fatalf("unexpected initial counter type: %s", m.counterType)
+	}
+	m.applyKey("c")
+	if m.counterType != jacoco.CounterBranch {
+		t.Fatalf("unexpected counter type after first toggle: %s", m.counterType)
+	}
+	m.applyKey("c")
+	if m.counterType != jacoco.CounterLine {
+		t.Fatalf("unexpected counter type after second toggle: %s", m.counterType)
+	}
+	m.applyKey("c")
+	if m.counterType != jacoco.CounterInstruction {
+		t.Fatalf("unexpected counter type after third toggle: %s", m.counterType)
 	}
 }
 
@@ -112,6 +165,81 @@ func TestCoverageSortAffectsChildOrder(t *testing.T) {
 	rows = m.currentChildren()
 	if rows[0].name != "a-high" {
 		t.Fatalf("coverage desc mismatch: first=%s", rows[0].name)
+	}
+}
+
+func TestCounterSwitchAffectsCoverageSort(t *testing.T) {
+	report := jacoco.Report{
+		Packages: []jacoco.Package{
+			{
+				Name: "pkg-a",
+				Counters: []jacoco.Counter{
+					{Type: jacoco.CounterInstruction, Missed: 1, Covered: 9},
+					{Type: jacoco.CounterBranch, Missed: 8, Covered: 2},
+				},
+			},
+			{
+				Name: "pkg-b",
+				Counters: []jacoco.Counter{
+					{Type: jacoco.CounterInstruction, Missed: 8, Covered: 2},
+					{Type: jacoco.CounterBranch, Missed: 1, Covered: 9},
+				},
+			},
+		},
+	}
+	m := NewModel(report, Config{Sort: "name"})
+
+	m.applyKey("s")
+	rows := m.currentChildren()
+	if rows[0].name != "pkg-b" {
+		t.Fatalf("instruction coverage asc mismatch: first=%s", rows[0].name)
+	}
+
+	m.applyKey("c")
+	rows = m.currentChildren()
+	if rows[0].name != "pkg-a" {
+		t.Fatalf("branch coverage asc mismatch: first=%s", rows[0].name)
+	}
+}
+
+func TestIncrementalFilter(t *testing.T) {
+	report := jacoco.Report{
+		Packages: []jacoco.Package{
+			{Name: "com/example/service", Counters: []jacoco.Counter{{Type: jacoco.CounterInstruction, Missed: 1, Covered: 9}}},
+			{Name: "com/example/repository", Counters: []jacoco.Counter{{Type: jacoco.CounterInstruction, Missed: 2, Covered: 8}}},
+			{Name: "org/other", Counters: []jacoco.Counter{{Type: jacoco.CounterInstruction, Missed: 3, Covered: 7}}},
+		},
+	}
+	m := NewModel(report, Config{Sort: "name"})
+
+	m.applyKey("/")
+	m.applyKey("e")
+	m.applyKey("x")
+
+	rows := m.currentChildren()
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 filtered rows, got %d", len(rows))
+	}
+	for _, row := range rows {
+		if !strings.Contains(row.name, "example") {
+			t.Fatalf("unexpected filtered row: %s", row.name)
+		}
+	}
+
+	m.applyKey("esc")
+	rows = m.currentChildren()
+	if len(rows) != 3 {
+		t.Fatalf("expected filter clear to restore rows, got %d", len(rows))
+	}
+}
+
+func TestFilterPromptVisibleInFilterMode(t *testing.T) {
+	m := NewModel(sampleReport(), Config{Sort: "name"})
+	m.applyKey("/")
+	m.applyKey("a")
+	view := m.View()
+	if !strings.Contains(view, "filter> a (Enter: apply, Esc: clear)") {
+		t.Fatalf("missing filter prompt in view: %q", view)
 	}
 }
 
@@ -146,6 +274,27 @@ func TestCursorMoveBounds(t *testing.T) {
 	m.applyKey("down")
 	if m.current().cursor != 1 {
 		t.Fatalf("cursor should stay at max, got %d", m.current().cursor)
+	}
+}
+
+func TestJumpKeys(t *testing.T) {
+	report := jacoco.Report{
+		Packages: []jacoco.Package{
+			{Name: "a"},
+			{Name: "b"},
+			{Name: "c"},
+		},
+	}
+	m := NewModel(report, Config{Sort: "name"})
+
+	m.applyKey("G")
+	if m.current().cursor != 2 {
+		t.Fatalf("G should move cursor to last row, got %d", m.current().cursor)
+	}
+
+	m.applyKey("g")
+	if m.current().cursor != 0 {
+		t.Fatalf("g should move cursor to first row, got %d", m.current().cursor)
 	}
 }
 
@@ -192,11 +341,55 @@ func TestRenderChildrenAlignsBarByLongestName(t *testing.T) {
 	}
 }
 
+func TestRenderSummaryFitsNarrowWidth(t *testing.T) {
+	report := jacoco.Report{
+		Counters: []jacoco.Counter{
+			{Type: jacoco.CounterInstruction, Missed: 1, Covered: 9},
+			{Type: jacoco.CounterBranch, Missed: 2, Covered: 8},
+			{Type: jacoco.CounterLine, Missed: 3, Covered: 7},
+			{Type: jacoco.CounterMethod, Missed: 4, Covered: 6},
+		},
+	}
+	m := NewModel(report, Config{Sort: "name", NoColor: true})
+	m.width = 40
+
+	view := m.renderSummary()
+	lines := strings.Split(view, "\n")
+	for _, line := range lines[1:] {
+		if lipgloss.Width(line) > m.width {
+			t.Fatalf("summary line exceeds width: width=%d line=%q", m.width, line)
+		}
+	}
+}
+
+func TestRenderChildrenFitsNarrowWidth(t *testing.T) {
+	report := jacoco.Report{
+		Packages: []jacoco.Package{
+			{
+				Name: "very/long/package/name/for/narrow/terminal/view",
+				Counters: []jacoco.Counter{
+					{Type: jacoco.CounterInstruction, Missed: 2, Covered: 8},
+				},
+			},
+		},
+	}
+	m := NewModel(report, Config{Sort: "name", NoColor: true})
+	m.width = 36
+
+	view := m.renderChildren()
+	lines := strings.Split(view, "\n")
+	for _, line := range lines[1:] {
+		if lipgloss.Width(line) > m.width {
+			t.Fatalf("children line exceeds width: width=%d line=%q", m.width, line)
+		}
+	}
+}
+
 func TestRenderChildrenEllipsizesLongNames(t *testing.T) {
 	report := jacoco.Report{
 		Packages: []jacoco.Package{
 			{
-				Name: "com/jsptags/navigation/pager/parser/very/very/very/long/path/IndexTagExport",
+				Name:     "com/jsptags/navigation/pager/parser/very/very/very/long/path/IndexTagExport",
 				Counters: []jacoco.Counter{{Type: jacoco.CounterInstruction, Missed: 0, Covered: 10}},
 			},
 		},
@@ -234,5 +427,13 @@ func TestCompactNameForDisplayFallsBackToEllipsisWhenStillTooLong(t *testing.T) 
 	}
 	if lipgloss.Width(got) > 20 {
 		t.Fatalf("expected width <= 20, got=%d, value=%q", lipgloss.Width(got), got)
+	}
+}
+
+func TestViewNoColorDisablesANSISequences(t *testing.T) {
+	m := NewModel(sampleReport(), Config{Threshold: 80, Sort: "name", NoColor: true})
+	view := m.View()
+	if hasANSI(view) {
+		t.Fatalf("view should not include ANSI sequences when no-color is enabled: %q", view)
 	}
 }

@@ -29,3 +29,11 @@
 ## 補足
 
 - Linux実機での実行検証は未実施（クロスビルド成功まで確認）。
+
+## 追加検証（多入力フォーマット）
+
+- コマンド: `go test ./internal/jacoco -run TestParseCoberturaBasicHierarchy -count=1 -v`
+- 結果: 成功
+
+- コマンド: `go test ./internal/jacoco -run TestParseLCOVBasic -count=1 -v`
+- 結果: 成功

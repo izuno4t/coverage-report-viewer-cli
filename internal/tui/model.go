@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
+	"unicode"
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,6 +18,7 @@ type Config struct {
 	Threshold int
 	Sort      string
 	NoColor   bool
+	Watch     bool
 }
 
 type nodeKind int
@@ -45,12 +48,17 @@ type navNode struct {
 }
 
 type Model struct {
-	report jacoco.Report
-	config Config
-	stack  []navNode
-	sortID string
-	width  int
-	height int
+	report      jacoco.Report
+	config      Config
+	stack       []navNode
+	sortID      string
+	counterType jacoco.CounterType
+	filterMode  bool
+	filterQuery string
+	reloadFn    func() (jacoco.Report, error)
+	watchErr    string
+	width       int
+	height      int
 
 	titleStyle  lipgloss.Style
 	headerStyle lipgloss.Style
@@ -60,13 +68,19 @@ type Model struct {
 }
 
 func NewModel(report jacoco.Report, cfg Config) Model {
+	return newModel(report, cfg, nil)
+}
+
+func newModel(report jacoco.Report, cfg Config, reloadFn func() (jacoco.Report, error)) Model {
 	m := Model{
-		report: report,
-		config: cfg,
-		stack:  []navNode{{kind: nodeReport, cursor: 0, offset: 0}},
-		sortID: normalizeInitialSort(cfg.Sort),
-		width:  100,
-		height: 30,
+		report:      report,
+		config:      cfg,
+		stack:       []navNode{{kind: nodeReport, cursor: 0, offset: 0}},
+		sortID:      normalizeInitialSort(cfg.Sort),
+		counterType: jacoco.CounterInstruction,
+		reloadFn:    reloadFn,
+		width:       100,
+		height:      30,
 		titleStyle: lipgloss.NewStyle().
 			Bold(true),
 		headerStyle: lipgloss.NewStyle().
@@ -87,6 +101,9 @@ func NewModel(report jacoco.Report, cfg Config) Model {
 }
 
 func (m Model) Init() tea.Cmd {
+	if m.config.Watch && m.reloadFn != nil {
+		return watchTickCmd()
+	}
 	return nil
 }
 
@@ -95,7 +112,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.ensureCursorVisible(m.childCount(*m.current()))
+		m.ensureCursorVisible(m.visibleChildCount())
+		return m, nil
+	case watchTickMsg:
+		if !m.config.Watch || m.reloadFn == nil {
+			return m, nil
+		}
+		return m, tea.Batch(watchReloadCmd(m.reloadFn), watchTickCmd())
+	case watchReloadMsg:
+		if msg.err != nil {
+			m.watchErr = msg.err.Error()
+			return m, nil
+		}
+		m.report = msg.report
+		m.watchErr = ""
+		m.stack = []navNode{{kind: nodeReport, cursor: 0, offset: 0}}
 		return m, nil
 	case tea.KeyMsg:
 		if quit := m.applyKey(msg.String()); quit {
@@ -106,6 +137,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) applyKey(key string) (quit bool) {
+	if m.filterMode {
+		return m.applyFilterKey(key)
+	}
 	switch key {
 	case "q", "ctrl+c":
 		return true
@@ -113,14 +147,74 @@ func (m *Model) applyKey(key string) (quit bool) {
 		m.moveCursor(-1)
 	case "down", "j":
 		m.moveCursor(1)
+	case "g":
+		m.jumpToStart()
+	case "G":
+		m.jumpToEnd()
 	case "enter":
 		m.enterChild()
 	case "b", "backspace":
 		m.goBack()
 	case "s":
 		m.toggleSort()
+	case "c":
+		m.toggleCounterType()
+	case "/":
+		m.startFilter()
 	}
 	return false
+}
+
+func (m *Model) applyFilterKey(key string) (quit bool) {
+	switch key {
+	case "esc":
+		m.clearFilter()
+	case "enter":
+		m.filterMode = false
+	case "backspace":
+		m.popFilterRune()
+	case "ctrl+c":
+		return true
+	default:
+		if isPrintableKey(key) {
+			m.filterQuery += key
+			m.current().cursor = 0
+			m.current().offset = 0
+		}
+	}
+	return false
+}
+
+func isPrintableKey(key string) bool {
+	if len([]rune(key)) != 1 {
+		return false
+	}
+	r, _ := utf8.DecodeRuneInString(key)
+	return unicode.IsPrint(r) && !unicode.IsSpace(r)
+}
+
+func (m *Model) popFilterRune() {
+	if m.filterQuery == "" {
+		return
+	}
+	runes := []rune(m.filterQuery)
+	m.filterQuery = string(runes[:len(runes)-1])
+	m.current().cursor = 0
+	m.current().offset = 0
+}
+
+func (m *Model) startFilter() {
+	m.filterMode = true
+	m.filterQuery = ""
+	m.current().cursor = 0
+	m.current().offset = 0
+}
+
+func (m *Model) clearFilter() {
+	m.filterMode = false
+	m.filterQuery = ""
+	m.current().cursor = 0
+	m.current().offset = 0
 }
 
 func normalizeInitialSort(raw string) string {
@@ -145,9 +239,22 @@ func (m *Model) toggleSort() {
 	m.current().offset = 0
 }
 
+func (m *Model) toggleCounterType() {
+	switch m.counterType {
+	case jacoco.CounterInstruction:
+		m.counterType = jacoco.CounterBranch
+	case jacoco.CounterBranch:
+		m.counterType = jacoco.CounterLine
+	default:
+		m.counterType = jacoco.CounterInstruction
+	}
+	m.current().cursor = 0
+	m.current().offset = 0
+}
+
 func (m *Model) moveCursor(delta int) {
 	current := m.current()
-	childCount := m.childCount(*current)
+	childCount := m.visibleChildCount()
 	if childCount == 0 {
 		current.cursor = 0
 		current.offset = 0
@@ -160,6 +267,24 @@ func (m *Model) moveCursor(delta int) {
 	if current.cursor > childCount-1 {
 		current.cursor = childCount - 1
 	}
+	m.ensureCursorVisible(childCount)
+}
+
+func (m *Model) jumpToStart() {
+	current := m.current()
+	current.cursor = 0
+	current.offset = 0
+}
+
+func (m *Model) jumpToEnd() {
+	current := m.current()
+	childCount := m.visibleChildCount()
+	if childCount <= 0 {
+		current.cursor = 0
+		current.offset = 0
+		return
+	}
+	current.cursor = childCount - 1
 	m.ensureCursorVisible(childCount)
 }
 
@@ -216,9 +341,42 @@ func (m Model) View() string {
 		"",
 		m.renderChildren(),
 		"",
-		m.helpStyle.Render(fmt.Sprintf("sort: %s | ↑/↓ or j/k: move  Enter: open  b: back  s: sort  q: quit", m.sortLabel())),
+		m.helpStyle.Render(fmt.Sprintf("sort: %s  counter: %s  filter: %s | ↑/↓ or j/k: move  g/G: jump  Enter: open  b: back  s: sort  c: counter  /: filter  q: quit", m.sortLabel(), m.counterLabel(), m.filterLabel())),
+	}
+	if m.config.Watch {
+		state := "on"
+		if m.watchErr != "" {
+			state = "error"
+		}
+		parts = append(parts, m.helpStyle.Render(fmt.Sprintf("watch: %s (1s polling)", state)))
+		if m.watchErr != "" {
+			parts = append(parts, m.helpStyle.Render(fmt.Sprintf("watch error: %s", m.watchErr)))
+		}
+	}
+	if m.filterMode {
+		parts = append(parts, m.helpStyle.Render(fmt.Sprintf("filter> %s (Enter: apply, Esc: clear)", m.filterQuery)))
 	}
 	return strings.Join(parts, "\n")
+}
+
+type watchTickMsg struct{}
+
+type watchReloadMsg struct {
+	report jacoco.Report
+	err    error
+}
+
+func watchTickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+		return watchTickMsg{}
+	})
+}
+
+func watchReloadCmd(reloadFn func() (jacoco.Report, error)) tea.Cmd {
+	return func() tea.Msg {
+		report, err := reloadFn()
+		return watchReloadMsg{report: report, err: err}
+	}
 }
 
 func (m Model) renderBreadcrumb() string {
@@ -256,12 +414,13 @@ func uniqueOrdered(items []string) []string {
 }
 
 func (m Model) renderSummary() string {
-	lines := []string{m.headerStyle.Render("Summary")}
+	lines := []string{m.headerStyle.Render(fmt.Sprintf("Summary (counter: %s)", m.counterLabel()))}
 	counters := m.currentCounters()
+	barWidth := m.summaryBarWidth()
 	for _, t := range []jacoco.CounterType{jacoco.CounterInstruction, jacoco.CounterBranch, jacoco.CounterLine, jacoco.CounterMethod} {
 		if c, ok := findCounter(counters, t); ok {
 			rate := c.CoverageRate()
-			line := fmt.Sprintf("%-12s %6.1f%%  %s", t, rate, bar(rate, 20))
+			line := fmt.Sprintf("%-12s %6.1f%%  %s", t, rate, bar(rate, barWidth))
 			lines = append(lines, m.styleForCoverage(rate).Render(line))
 		}
 	}
@@ -295,19 +454,20 @@ func (m Model) currentCounters() []jacoco.Counter {
 }
 
 func (m Model) renderChildren() string {
-	lines := []string{m.headerStyle.Render(fmt.Sprintf("Children (%s)", m.sortLabel()))}
+	lines := []string{m.headerStyle.Render(fmt.Sprintf("Children (%s, %s, filter=%s)", m.sortLabel(), m.counterLabel(), m.filterLabel()))}
 	children := m.currentChildren()
 	if len(children) == 0 {
 		return lines[0] + "\n(no children)"
 	}
 	nameWidth := maxChildNameWidth(children)
-	maxNameWidth := m.width - 20
+	maxNameWidth := m.width - 16
 	if maxNameWidth < 12 {
 		maxNameWidth = 12
 	}
 	if nameWidth > maxNameWidth {
 		nameWidth = maxNameWidth
 	}
+	barWidth := m.childrenBarWidth(nameWidth)
 	current := m.stack[len(m.stack)-1]
 	maxRows := m.maxVisibleChildren()
 	if maxRows > len(children) {
@@ -334,11 +494,33 @@ func (m Model) renderChildren() string {
 			style = style.Inherit(m.cursorStyle)
 		}
 		name := compactNameForDisplay(c.name, nameWidth)
-		line := fmt.Sprintf("%s %s %6.1f%% %s", marker, padRightDisplay(name, nameWidth), c.coverage, bar(c.coverage, 10))
+		line := fmt.Sprintf("%s %s %6.1f%% %s", marker, padRightDisplay(name, nameWidth), c.coverage, bar(c.coverage, barWidth))
 		style = style.Inherit(m.styleForCoverage(c.coverage))
 		lines = append(lines, style.Render(line))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (m Model) summaryBarWidth() int {
+	width := m.width - 24
+	if width < 6 {
+		return 6
+	}
+	if width > 30 {
+		return 30
+	}
+	return width
+}
+
+func (m Model) childrenBarWidth(nameWidth int) int {
+	width := m.width - nameWidth - 12
+	if width < 4 {
+		return 4
+	}
+	if width > 20 {
+		return 20
+	}
+	return width
 }
 
 func (m Model) summaryLineCount() int {
@@ -522,25 +704,44 @@ func (m Model) currentChildren() []childRow {
 	case nodeReport:
 		rows = make([]childRow, 0, len(m.report.Packages))
 		for i, p := range m.report.Packages {
-			rows = append(rows, childRow{index: i, name: p.Name, coverage: instructionCoverage(p.Counters)})
+			rows = append(rows, childRow{index: i, name: p.Name, coverage: coverageForType(p.Counters, m.counterType)})
 		}
 	case nodePackage:
 		pkg := m.report.Packages[current.packageIx]
 		rows = make([]childRow, 0, len(pkg.Classes))
 		for i, c := range pkg.Classes {
-			rows = append(rows, childRow{index: i, name: c.Name, coverage: instructionCoverage(c.Counters)})
+			rows = append(rows, childRow{index: i, name: c.Name, coverage: coverageForType(c.Counters, m.counterType)})
 		}
 	case nodeClass:
 		class := m.report.Packages[current.packageIx].Classes[current.classIx]
 		rows = make([]childRow, 0, len(class.Methods))
-		for i, m := range class.Methods {
-			rows = append(rows, childRow{index: i, name: m.Name, coverage: instructionCoverage(m.Counters)})
+		for i, method := range class.Methods {
+			rows = append(rows, childRow{
+				index:    i,
+				name:     methodDisplayName(method),
+				coverage: coverageForType(method.Counters, m.counterType),
+			})
 		}
 	default:
 		return nil
 	}
+	rows = m.filterRows(rows)
 	m.sortRows(rows)
 	return rows
+}
+
+func (m Model) filterRows(rows []childRow) []childRow {
+	query := strings.ToLower(strings.TrimSpace(m.filterQuery))
+	if query == "" {
+		return rows
+	}
+	filtered := make([]childRow, 0, len(rows))
+	for _, row := range rows {
+		if strings.Contains(strings.ToLower(row.name), query) {
+			filtered = append(filtered, row)
+		}
+	}
+	return filtered
 }
 
 func (m Model) sortRows(rows []childRow) {
@@ -577,24 +778,37 @@ func (m Model) sortLabel() string {
 	}
 }
 
-func (m Model) childCount(node navNode) int {
-	switch node.kind {
-	case nodeReport:
-		return len(m.report.Packages)
-	case nodePackage:
-		return len(m.report.Packages[node.packageIx].Classes)
-	case nodeClass:
-		return len(m.report.Packages[node.packageIx].Classes[node.classIx].Methods)
-	default:
-		return 0
-	}
+func (m Model) visibleChildCount() int {
+	return len(m.currentChildren())
 }
 
-func instructionCoverage(counters []jacoco.Counter) float64 {
-	if c, ok := findCounter(counters, jacoco.CounterInstruction); ok {
+func coverageForType(counters []jacoco.Counter, counterType jacoco.CounterType) float64 {
+	if c, ok := findCounter(counters, counterType); ok {
 		return c.CoverageRate()
 	}
 	return 0
+}
+
+func (m Model) counterLabel() string {
+	return strings.ToLower(string(m.counterType))
+}
+
+func (m Model) filterLabel() string {
+	if strings.TrimSpace(m.filterQuery) == "" {
+		return "off"
+	}
+	return m.filterQuery
+}
+
+func methodDisplayName(method jacoco.Method) string {
+	label := method.Name
+	if method.Desc != "" {
+		label += method.Desc
+	}
+	if method.Line > 0 {
+		label += fmt.Sprintf(":%d", method.Line)
+	}
+	return label
 }
 
 func bar(percentage float64, width int) string {

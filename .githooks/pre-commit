@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+set -eu
+
+if ! command -v gofmt >/dev/null 2>&1; then
+  echo "pre-commit: gofmt not found; skipping format" >&2
+  exit 0
+fi
+
+staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
+go_files=""
+
+for f in $staged_files; do
+  case "$f" in
+    *.go)
+      if [ -f "$f" ]; then
+        go_files="$go_files $f"
+      fi
+      ;;
+  esac
+done
+
+if [ -n "${go_files# }" ]; then
+  gofmt -w $go_files
+  git add $go_files
+fi

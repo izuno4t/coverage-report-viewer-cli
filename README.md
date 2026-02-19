@@ -38,6 +38,8 @@ crv [options] [path]
 
 - `-t, --threshold <n>`: カバレッジ閾値（デフォルト: `80`）
 - `-s, --sort <key>`: 初期ソート（`name` / `coverage`、デフォルト: `name`）
+- `--format <fmt>`: 入力フォーマット（`auto` / `jacoco` / `cobertura` / `lcov`、デフォルト: `auto`）
+- `--watch`: レポート変更を監視して自動再読み込み
 - `--no-color`: カラー表示を無効化
 - `-v, --version`: バージョン表示
 - `-h, --help`: ヘルプ表示
@@ -45,9 +47,12 @@ crv [options] [path]
 ## キーバインド
 
 - `↑` / `↓` または `k` / `j`: カーソル移動
+- `g` / `G`: 先頭 / 末尾へジャンプ
 - `Enter`: 子ノードへ移動
 - `b` または `Backspace`: 親ノードへ戻る
 - `s`: ソート切り替え
+- `c`: カウンタ種別切り替え（Instruction / Branch / Line）
+- `/`: 名前フィルター入力（Escで解除）
 - `q` または `Ctrl+C`: 終了
 
 ## 開発コマンド（Make）
@@ -75,6 +80,7 @@ make lint-md
 4. 見つからない場合は次のデフォルトパスへフォールバック
    - `target/site/jacoco/jacoco.xml`（Maven）
    - `build/reports/jacoco/test/jacocoTestReport.xml`（Gradle）
+5. `<modules>` がある場合は各サブモジュールの `pom.xml` をたどって同様に探索し、見つかった複数 XML をマージ
 
 ## 色分けルール
 
@@ -96,3 +102,7 @@ make lint-md
 - インクリメンタル検索
 - テキスト / JSON エクスポート
 - Watch モード
+
+## 移行ガイド
+
+- 旧コマンド `jrv` から `crv` への移行手順と互換方針は `docs/MIGRATION.md` を参照

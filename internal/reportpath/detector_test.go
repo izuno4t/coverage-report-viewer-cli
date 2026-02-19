@@ -62,6 +62,35 @@ func TestDetectReturnsErrorWhenNoCandidate(t *testing.T) {
 	}
 }
 
+func TestDetectAllFindsModuleReports(t *testing.T) {
+	dir := t.TempDir()
+
+	rootPom := `<project><modules><module>module-a</module><module>module-b</module></modules></project>`
+	modulePom := `<project><build><plugins><plugin><groupId>org.jacoco</groupId><artifactId>jacoco-maven-plugin</artifactId></plugin></plugins></build></project>`
+	writeFile(t, filepath.Join(dir, "pom.xml"), rootPom)
+	writeFile(t, filepath.Join(dir, "module-a/pom.xml"), modulePom)
+	writeFile(t, filepath.Join(dir, "module-b/pom.xml"), modulePom)
+	writeFile(t, filepath.Join(dir, "module-a/target/site/jacoco/jacoco.xml"), "<report name=\"a\"/>")
+	writeFile(t, filepath.Join(dir, "module-b/target/site/jacoco/jacoco.xml"), "<report name=\"b\"/>")
+
+	paths, err := DetectAll(dir)
+	if err != nil {
+		t.Fatalf("detect all failed: %v", err)
+	}
+	if len(paths) != 2 {
+		t.Fatalf("expected 2 paths, got %d (%v)", len(paths), paths)
+	}
+
+	wantA := filepath.Join(dir, "module-a/target/site/jacoco/jacoco.xml")
+	wantB := filepath.Join(dir, "module-b/target/site/jacoco/jacoco.xml")
+	if paths[0] != wantA && paths[1] != wantA {
+		t.Fatalf("module-a report not found in %v", paths)
+	}
+	if paths[0] != wantB && paths[1] != wantB {
+		t.Fatalf("module-b report not found in %v", paths)
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

@@ -1,7 +1,8 @@
 package reportpath
 
 type pomProject struct {
-	Build pomBuild `xml:"build"`
+	Modules []string `xml:"modules>module"`
+	Build   pomBuild `xml:"build"`
 }
 
 type pomBuild struct {

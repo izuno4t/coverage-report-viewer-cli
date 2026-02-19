@@ -12,6 +12,7 @@ import (
 )
 
 var startUI = tui.Start
+var startUIWatch = tui.StartWatch
 
 // Run executes the CLI flow and returns the process exit code.
 func Run(args []string, version string, out io.Writer, errOut io.Writer) int {
@@ -32,31 +33,53 @@ func Run(args []string, version string, out io.Writer, errOut io.Writer) int {
 	}
 
 	reportPath := opts.Path
+	reportPaths := make([]string, 0, 1)
 	if reportPath == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
 			_, _ = fmt.Fprintf(errOut, "error: カレントディレクトリ取得に失敗しました: %v\n", err)
 			return 1
 		}
-		reportPath, err = reportpath.Detect(cwd)
+		reportPaths, err = reportpath.DetectAll(cwd)
 		if err != nil {
 			_, _ = fmt.Fprintf(errOut, "error: JaCoCo XML が見つかりません: %v\n", err)
 			_, _ = fmt.Fprintln(errOut, "hint: path を指定するか、target/site/jacoco/jacoco.xml の生成を確認してください")
 			return 1
 		}
+	} else {
+		reportPaths = append(reportPaths, reportPath)
 	}
 
-	report, err := jacoco.ParseFile(reportPath)
+	loadReport := func() (jacoco.Report, error) {
+		reports := make([]jacoco.Report, 0, len(reportPaths))
+		for _, path := range reportPaths {
+			report, err := jacoco.ParseWithFormatFile(path, jacoco.InputFormat(opts.Format))
+			if err != nil {
+				return jacoco.Report{}, err
+			}
+			reports = append(reports, report)
+		}
+		return jacoco.MergeReports(reports...), nil
+	}
+	report, err := loadReport()
 	if err != nil {
-		_, _ = fmt.Fprintf(errOut, "error: JaCoCo XML の読み込みに失敗しました: %v\n", err)
+		_, _ = fmt.Fprintf(errOut, "error: カバレッジレポートの読み込みに失敗しました: %v\n", err)
 		return 1
 	}
 
-	if err := startUI(report, tui.Config{
+	uiConfig := tui.Config{
 		Threshold: opts.Threshold,
 		Sort:      opts.Sort,
 		NoColor:   opts.NoColor,
-	}); err != nil {
+		Watch:     opts.Watch,
+	}
+
+	if opts.Watch {
+		if err := startUIWatch(report, uiConfig, loadReport); err != nil {
+			_, _ = fmt.Fprintf(errOut, "error: TUI 起動に失敗しました: %v\n", err)
+			return 1
+		}
+	} else if err := startUI(report, uiConfig); err != nil {
 		_, _ = fmt.Fprintf(errOut, "error: TUI 起動に失敗しました: %v\n", err)
 		return 1
 	}

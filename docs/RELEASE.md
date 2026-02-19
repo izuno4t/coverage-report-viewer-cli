@@ -25,3 +25,5 @@ goreleaser release --clean
 
 - Homebrew Formula は `Formula/crv.rb` として生成される。
 - `go install` は `cmd/crv` パッケージを指定する。
+- `--format` オプションで `jacoco` / `cobertura` / `lcov` を明示指定できる。
+- 旧コマンド移行方針は `docs/MIGRATION.md` を参照する。

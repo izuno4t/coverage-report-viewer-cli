@@ -30,6 +30,18 @@
 | TC-INT-007 | F-DSP-01 | `internal/tui/model_test.go:TestViewIncludesSections` |
 | TC-UNIT-011 | F-DSP-02 | `internal/tui/model_test.go:TestBarWidth` |
 | TC-INT-008 | F-DSP-02 | `internal/tui/model_test.go:TestViewIncludesSections` |
+| TC-UNIT-012 | F-IN-05 | `internal/reportpath/detector_test.go:TestDetectAllFindsModuleReports` |
+| TC-INT-009 | F-IN-05 | `internal/app/run_test.go:TestRunAutoDetectsAndMergesMultiModuleReports` |
+| TC-UNIT-013 | F-IN-06 | `internal/jacoco/cobertura_test.go:TestParseCoberturaBasicHierarchy` |
+| TC-UNIT-014 | F-IN-07 | `internal/jacoco/format_test.go:TestDetectFormat` |
+| TC-UNIT-015 | F-IN-07 | `internal/cli/options_test.go:TestParseAcceptsLCOVFormat` |
+| TC-UNIT-016 | F-IN-08 | `internal/jacoco/lcov_test.go:TestParseLCOVBasic` |
+| TC-INT-010 | F-IN-08 | `internal/app/run_test.go:TestRunWithFormatLCOV` |
+| TC-UNIT-017 | F-NAV-06 | `internal/tui/model_test.go:TestIncrementalFilter` |
+| TC-UNIT-018 | F-NAV-07 | `internal/tui/model_test.go:TestJumpKeys` |
+| TC-UNIT-019 | F-DSP-03 | `internal/tui/model_test.go:TestCounterTypeCycle` |
+| TC-UNIT-020 | F-DSP-04 | `internal/tui/model_test.go:TestRenderSummaryFitsNarrowWidth` |
+| TC-UNIT-021 | F-DSP-05 | `internal/tui/model_test.go:TestViewNoColorDisablesANSISequences` |
 | TC-NFR-003 | NF-03 | `go.mod` と `go test ./...` 成功 |
 | TC-NFR-006 | NF-06 | `internal/jacoco/parser_test.go` 各テスト |
 
