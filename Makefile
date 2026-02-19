@@ -2,7 +2,7 @@ APP := crv
 CMD := ./cmd/crv
 OUT := ./bin/$(APP)
 
-.PHONY: help run build test test-perf lint-md fmt tidy verify build-darwin-arm64 build-darwin-amd64 build-linux-amd64
+.PHONY: help run build test test-perf lint-md fmt tidy verify all release build-darwin-arm64 build-darwin-amd64 build-linux-amd64
 
 help:
 	@echo "Available targets:"
@@ -14,6 +14,8 @@ help:
 	@echo "  make fmt                # format Go files"
 	@echo "  make tidy               # tidy go.mod/go.sum"
 	@echo "  make verify             # test + markdown lint"
+	@echo "  make all                # fmt + verify + build"
+	@echo "  make release            # goreleaser release --clean"
 	@echo "  make build-darwin-arm64 # cross build"
 	@echo "  make build-darwin-amd64 # cross build"
 	@echo "  make build-linux-amd64  # cross build"
@@ -40,6 +42,11 @@ tidy:
 	go mod tidy
 
 verify: test lint-md
+
+all: fmt verify build
+
+release:
+	goreleaser release --clean
 
 build-darwin-arm64:
 	GOOS=darwin GOARCH=arm64 go build -o /tmp/$(APP)-darwin-arm64 $(CMD)
