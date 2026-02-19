@@ -1,0 +1,11 @@
+{
+  "config": {
+    "MD060": false,
+    "MD013": {
+      "line_length": 120,
+      "tables": false,
+      "code_blocks": false,
+      "headings": false
+    }
+  }
+}

@@ -1,0 +1,58 @@
+version: 2
+
+project_name: jrv
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: jrv
+    main: ./cmd/jrv
+    binary: jrv
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: linux
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: default
+    ids:
+      - jrv
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64{{ else }}{{ .Arch }}{{ end }}
+
+checksum:
+  name_template: checksums.txt
+
+brews:
+  - name: jrv
+    ids:
+      - default
+    repository:
+      owner: ochyai
+      name: homebrew-jrv
+    directory: Formula
+    homepage: https://github.com/ochyai/jacoco-report-viewer-cli
+    description: JaCoCo XML coverage report viewer for terminals
+    license: MIT
+    test: |
+      system "#{bin}/jrv", "--version"
+
+release:
+  draft: false
+  prerelease: auto
