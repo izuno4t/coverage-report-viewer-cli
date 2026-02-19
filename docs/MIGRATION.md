@@ -10,7 +10,7 @@
 - 製品名: `JaCoCo Report Viewer CLI` から `Coverage Report Viewer` へ変更
 - コマンド名: `jrv` から `crv` へ変更
 - Go install パッケージ: `.../cmd/jrv` から `.../cmd/crv` へ変更
-- Homebrew Tap: `homebrew-jrv` から `homebrew-crv` へ変更
+- Homebrew Tap: `homebrew-jrv` から `homebrew-tap` へ変更
 
 ## 移行手順
 
@@ -18,7 +18,7 @@
 
 ```bash
 brew untap ochyai/homebrew-jrv || true
-brew tap ochyai/homebrew-crv
+brew tap izuno4t/homebrew-tap
 brew install crv
 ```
 

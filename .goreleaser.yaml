@@ -44,8 +44,9 @@ brews:
     ids:
       - default
     repository:
-      owner: ochyai
-      name: homebrew-crv
+      owner: izuno4t
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     directory: Formula
     homepage: https://github.com/izuno4t/coverage-report-viewer-cli
     description: Coverage report viewer for terminals

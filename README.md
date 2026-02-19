@@ -1,22 +1,26 @@
 # Coverage Report Viewer (`crv`)
 
-JaCoCo XML レポートをターミナル上でインタラクティブに閲覧する CLI ツールです。  
+JaCoCo / Cobertura / LCOV のカバレッジレポートをターミナル上でインタラクティブに閲覧する CLI ツールです。  
 ブラウザに切り替えず、階層をドリルダウンしてカバレッジを確認できます。
 
 ## 主な機能
 
-- JaCoCo XML レポートの読み込み（引数指定または自動検出）
+- JaCoCo XML / Cobertura XML / LCOV の読み込み
+- 入力フォーマット自動判別（`--format` で明示指定も可能）
+- JaCoCo プロジェクトの自動検出（`pom.xml` / `<modules>` 対応、複数 XML マージ）
 - `Report -> Package -> Class -> Method` の階層ナビゲーション
 - カバレッジ率とバー表示
 - 閾値ベースの色分け表示
-- ソート切り替え（名前 / カバレッジ）
+- ソート切り替え（名前 / カバレッジ）、カウンタ種別切り替え（Instruction / Branch / Line）
+- 名前フィルター（`/`）、先頭/末尾ジャンプ（`g` / `G`）
+- Watch モード（`--watch`）
 
 ## インストール
 
 ### Homebrew
 
 ```bash
-brew tap ochyai/homebrew-crv
+brew tap izuno4t/homebrew-tap
 brew install crv
 ```
 
@@ -32,7 +36,7 @@ go install github.com/izuno4t/coverage-report-viewer-cli/cmd/crv@latest
 crv [options] [path]
 ```
 
-- `path`: JaCoCo XML レポートのパス（省略時は自動検出）
+- `path`: カバレッジレポートのパス（省略時は JaCoCo プロジェクトを自動検出）
 
 ### オプション
 
@@ -97,11 +101,8 @@ make lint-md
 ## 将来拡張（予定）
 
 - ソースコード行カバレッジ表示
-- マルチモジュール XML マージ
 - diff モード
-- インクリメンタル検索
 - テキスト / JSON エクスポート
-- Watch モード
 
 ## 移行ガイド
 
