@@ -11,7 +11,6 @@ import (
 	"github.com/izuno4t/coverage-report-viewer-cli/internal/tui"
 )
 
-var startUI = tui.Start
 var startUIWatch = tui.StartWatch
 
 // Run executes the CLI flow and returns the process exit code.
@@ -74,12 +73,12 @@ func Run(args []string, version string, out io.Writer, errOut io.Writer) int {
 		Watch:     opts.Watch,
 	}
 
-	if opts.Watch {
-		if err := startUIWatch(report, uiConfig, loadReport); err != nil {
-			_, _ = fmt.Fprintf(errOut, "error: TUI 起動に失敗しました: %v\n", err)
-			return 1
-		}
-	} else if err := startUI(report, uiConfig); err != nil {
+	probe, err := newReportUpdateProbe(reportPaths)
+	if err != nil {
+		_, _ = fmt.Fprintf(errOut, "error: 監視対象レポートの状態取得に失敗しました: %v\n", err)
+		return 1
+	}
+	if err := startUIWatch(report, uiConfig, loadReport, probe); err != nil {
 		_, _ = fmt.Fprintf(errOut, "error: TUI 起動に失敗しました: %v\n", err)
 		return 1
 	}

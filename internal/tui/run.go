@@ -13,9 +13,8 @@ func Start(report jacoco.Report, cfg Config) error {
 	return err
 }
 
-func StartWatch(report jacoco.Report, cfg Config, reloadFn func() (jacoco.Report, error)) error {
-	cfg.Watch = true
-	m := newModel(report, cfg, reloadFn)
+func StartWatch(report jacoco.Report, cfg Config, reloadFn func() (jacoco.Report, error), probeFn func() (bool, error)) error {
+	m := newModel(report, cfg, reloadFn, probeFn)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()
 	return err

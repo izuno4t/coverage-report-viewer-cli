@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/izuno4t/coverage-report-viewer-cli/internal/jacoco"
 )
@@ -435,5 +437,140 @@ func TestViewNoColorDisablesANSISequences(t *testing.T) {
 	view := m.View()
 	if hasANSI(view) {
 		t.Fatalf("view should not include ANSI sequences when no-color is enabled: %q", view)
+	}
+}
+
+func TestWatchProbeShowsConfirmationPrompt(t *testing.T) {
+	m := newModel(sampleReport(), Config{Watch: false}, func() (jacoco.Report, error) {
+		return sampleReport(), nil
+	}, func() (bool, error) {
+		return true, nil
+	})
+
+	next, _ := m.Update(watchProbeMsg{changed: true})
+	updated, ok := next.(Model)
+	if !ok {
+		t.Fatalf("unexpected model type: %T", next)
+	}
+	if !updated.watchPrompt {
+		t.Fatal("watch prompt should be enabled after change detection")
+	}
+	if !strings.Contains(updated.View(), "reload now?") {
+		t.Fatal("view should include watch confirmation prompt")
+	}
+}
+
+func TestWatchConfirmAcceptTriggersReload(t *testing.T) {
+	updatedReport := sampleReport()
+	updatedReport.Name = "updated"
+	reloadCalled := false
+	m := newModel(sampleReport(), Config{Watch: false}, func() (jacoco.Report, error) {
+		reloadCalled = true
+		return updatedReport, nil
+	}, func() (bool, error) {
+		return false, nil
+	})
+	m.watchPrompt = true
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	intermediate := next.(Model)
+	if intermediate.watchPrompt {
+		t.Fatal("watch prompt should be cleared after confirmation")
+	}
+	if cmd == nil {
+		t.Fatal("reload command should be returned on confirmation")
+	}
+
+	msg := cmd()
+	reloadMsg, ok := msg.(watchReloadMsg)
+	if !ok {
+		t.Fatalf("unexpected command message: %T", msg)
+	}
+	if reloadMsg.err != nil {
+		t.Fatalf("reload should succeed: %v", reloadMsg.err)
+	}
+	if !reloadCalled {
+		t.Fatal("reload function should be called")
+	}
+
+	next, _ = intermediate.Update(reloadMsg)
+	final := next.(Model)
+	if final.report.Name != "updated" {
+		t.Fatalf("report should be replaced after reload: %s", final.report.Name)
+	}
+}
+
+func TestWatchConfirmRejectSkipsReload(t *testing.T) {
+	reloadCalled := false
+	m := newModel(sampleReport(), Config{Watch: false}, func() (jacoco.Report, error) {
+		reloadCalled = true
+		return sampleReport(), nil
+	}, nil)
+	m.watchPrompt = true
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updated := next.(Model)
+	if updated.watchPrompt {
+		t.Fatal("watch prompt should be cleared on reject")
+	}
+	if cmd != nil {
+		t.Fatal("reject should not schedule reload command")
+	}
+	if reloadCalled {
+		t.Fatal("reload should not be called on reject")
+	}
+}
+
+func TestWatchProbeErrorIsShown(t *testing.T) {
+	m := newModel(sampleReport(), Config{Watch: false}, nil, nil)
+	next, _ := m.Update(watchProbeMsg{err: errors.New("probe failed")})
+	updated := next.(Model)
+	if updated.watchErr != "probe failed" {
+		t.Fatalf("unexpected watch error: %s", updated.watchErr)
+	}
+}
+
+func TestWatchFlagAutoReloadsWithoutConfirmation(t *testing.T) {
+	reloadCalled := false
+	m := newModel(sampleReport(), Config{Watch: true}, func() (jacoco.Report, error) {
+		reloadCalled = true
+		r := sampleReport()
+		r.Name = "reloaded"
+		return r, nil
+	}, func() (bool, error) {
+		t.Fatal("probe should not be used in auto watch mode")
+		return false, nil
+	})
+
+	next, cmd := m.Update(watchTickMsg{})
+	updated := next.(Model)
+	if updated.watchPrompt {
+		t.Fatal("watch prompt should not appear in auto watch mode")
+	}
+	if cmd == nil {
+		t.Fatal("watch tick should schedule reload command")
+	}
+
+	msg := cmd()
+	switch typed := msg.(type) {
+	case tea.BatchMsg:
+		if len(typed) != 2 {
+			t.Fatalf("unexpected batch length: %d", len(typed))
+		}
+		if typed[0] == nil {
+			t.Fatal("first batch command should not be nil")
+		}
+		reloadMsg, ok := typed[0]().(watchReloadMsg)
+		if !ok {
+			t.Fatalf("first batch message should be watchReloadMsg")
+		}
+		if reloadMsg.err != nil {
+			t.Fatalf("reload should succeed: %v", reloadMsg.err)
+		}
+	default:
+		t.Fatalf("unexpected message type: %T", msg)
+	}
+	if !reloadCalled {
+		t.Fatal("reload function should be called in auto watch mode")
 	}
 }

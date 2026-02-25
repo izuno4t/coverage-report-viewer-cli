@@ -46,7 +46,7 @@ func Parse(args []string) (Options, error) {
 	fs.StringVar(&opts.Format, "format", "auto", "input format")
 	fs.StringVar(&opts.Sort, "sort", defaultSort, "initial sort key")
 	fs.StringVar(&opts.Sort, "s", defaultSort, "initial sort key")
-	fs.BoolVar(&opts.Watch, "watch", false, "watch input report and reload")
+	fs.BoolVar(&opts.Watch, "watch", false, "watch input report and reload automatically")
 	fs.BoolVar(&opts.NoColor, "no-color", false, "disable color output")
 	fs.BoolVar(&opts.ShowVersion, "version", false, "show version")
 	fs.BoolVar(&opts.ShowVersion, "v", false, "show version")

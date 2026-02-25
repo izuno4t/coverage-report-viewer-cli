@@ -77,12 +77,12 @@ func TestRunAutoDetectsReportPath(t *testing.T) {
 		_ = os.Chdir(origWD)
 	})
 
-	origStartUI := startUI
+	origStartUIWatch := startUIWatch
 	t.Cleanup(func() {
-		startUI = origStartUI
+		startUIWatch = origStartUIWatch
 	})
 	called := false
-	startUI = func(report jacoco.Report, _ tui.Config) error {
+	startUIWatch = func(report jacoco.Report, _ tui.Config, _ func() (jacoco.Report, error), _ func() (bool, error)) error {
 		called = true
 		if report.Name != "x" {
 			t.Fatalf("unexpected report name: %s", report.Name)
@@ -97,7 +97,7 @@ func TestRunAutoDetectsReportPath(t *testing.T) {
 		t.Fatalf("expected 0, got %d (stderr=%q)", code, errOut.String())
 	}
 	if !called {
-		t.Fatal("startUI should be called")
+		t.Fatal("startUIWatch should be called")
 	}
 }
 
@@ -131,11 +131,11 @@ func TestRunAutoDetectsAndMergesMultiModuleReports(t *testing.T) {
 		_ = os.Chdir(origWD)
 	})
 
-	origStartUI := startUI
+	origStartUIWatch := startUIWatch
 	t.Cleanup(func() {
-		startUI = origStartUI
+		startUIWatch = origStartUIWatch
 	})
-	startUI = func(report jacoco.Report, _ tui.Config) error {
+	startUIWatch = func(report jacoco.Report, _ tui.Config, _ func() (jacoco.Report, error), _ func() (bool, error)) error {
 		if len(report.Packages) != 2 {
 			t.Fatalf("expected merged package count=2, got=%d", len(report.Packages))
 		}
@@ -157,11 +157,11 @@ func TestRunFailsWhenUIFails(t *testing.T) {
 		t.Fatalf("write failed: %v", err)
 	}
 
-	origStartUI := startUI
+	origStartUIWatch := startUIWatch
 	t.Cleanup(func() {
-		startUI = origStartUI
+		startUIWatch = origStartUIWatch
 	})
-	startUI = func(_ jacoco.Report, _ tui.Config) error {
+	startUIWatch = func(_ jacoco.Report, _ tui.Config, _ func() (jacoco.Report, error), _ func() (bool, error)) error {
 		return errors.New("boom")
 	}
 
@@ -180,12 +180,12 @@ func TestRunFailsOnInvalidXML(t *testing.T) {
 		t.Fatalf("write failed: %v", err)
 	}
 
-	origStartUI := startUI
+	origStartUIWatch := startUIWatch
 	t.Cleanup(func() {
-		startUI = origStartUI
+		startUIWatch = origStartUIWatch
 	})
-	startUI = func(_ jacoco.Report, _ tui.Config) error {
-		t.Fatal("startUI should not be called on parse error")
+	startUIWatch = func(_ jacoco.Report, _ tui.Config, _ func() (jacoco.Report, error), _ func() (bool, error)) error {
+		t.Fatal("startUIWatch should not be called on parse error")
 		return nil
 	}
 
@@ -207,22 +207,22 @@ func TestRunWatchModeUsesWatchUI(t *testing.T) {
 		t.Fatalf("write failed: %v", err)
 	}
 
-	origStartUI := startUI
 	origStartUIWatch := startUIWatch
 	t.Cleanup(func() {
-		startUI = origStartUI
 		startUIWatch = origStartUIWatch
 	})
-
-	startUI = func(_ jacoco.Report, _ tui.Config) error {
-		t.Fatal("startUI should not be called in watch mode")
-		return nil
-	}
 	called := false
-	startUIWatch = func(report jacoco.Report, cfg tui.Config, reloadFn func() (jacoco.Report, error)) error {
+	startUIWatch = func(report jacoco.Report, cfg tui.Config, reloadFn func() (jacoco.Report, error), probeFn func() (bool, error)) error {
 		called = true
 		if !cfg.Watch {
 			t.Fatal("watch config should be true")
+		}
+		changed, err := probeFn()
+		if err != nil {
+			t.Fatalf("probe failed: %v", err)
+		}
+		if changed {
+			t.Fatal("probe should not report change without file update")
 		}
 		r, err := reloadFn()
 		if err != nil {
@@ -253,12 +253,12 @@ func TestRunWithFormatCobertura(t *testing.T) {
 		t.Fatalf("write failed: %v", err)
 	}
 
-	origStartUI := startUI
+	origStartUIWatch := startUIWatch
 	t.Cleanup(func() {
-		startUI = origStartUI
+		startUIWatch = origStartUIWatch
 	})
 	called := false
-	startUI = func(report jacoco.Report, _ tui.Config) error {
+	startUIWatch = func(report jacoco.Report, _ tui.Config, _ func() (jacoco.Report, error), _ func() (bool, error)) error {
 		called = true
 		if len(report.Packages) != 1 {
 			t.Fatalf("unexpected package count: %d", len(report.Packages))
@@ -273,7 +273,7 @@ func TestRunWithFormatCobertura(t *testing.T) {
 		t.Fatalf("expected 0, got %d (stderr=%q)", code, errOut.String())
 	}
 	if !called {
-		t.Fatal("startUI should be called")
+		t.Fatal("startUIWatch should be called")
 	}
 }
 
@@ -285,12 +285,12 @@ func TestRunWithFormatLCOV(t *testing.T) {
 		t.Fatalf("write failed: %v", err)
 	}
 
-	origStartUI := startUI
+	origStartUIWatch := startUIWatch
 	t.Cleanup(func() {
-		startUI = origStartUI
+		startUIWatch = origStartUIWatch
 	})
 	called := false
-	startUI = func(report jacoco.Report, _ tui.Config) error {
+	startUIWatch = func(report jacoco.Report, _ tui.Config, _ func() (jacoco.Report, error), _ func() (bool, error)) error {
 		called = true
 		if report.Name != "lcov" {
 			t.Fatalf("unexpected report name: %s", report.Name)
@@ -305,6 +305,6 @@ func TestRunWithFormatLCOV(t *testing.T) {
 		t.Fatalf("expected 0, got %d (stderr=%q)", code, errOut.String())
 	}
 	if !called {
-		t.Fatal("startUI should be called")
+		t.Fatal("startUIWatch should be called")
 	}
 }

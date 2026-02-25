@@ -56,6 +56,8 @@ type Model struct {
 	filterMode  bool
 	filterQuery string
 	reloadFn    func() (jacoco.Report, error)
+	probeFn     func() (bool, error)
+	watchPrompt bool
 	watchErr    string
 	width       int
 	height      int
@@ -68,10 +70,10 @@ type Model struct {
 }
 
 func NewModel(report jacoco.Report, cfg Config) Model {
-	return newModel(report, cfg, nil)
+	return newModel(report, cfg, nil, nil)
 }
 
-func newModel(report jacoco.Report, cfg Config, reloadFn func() (jacoco.Report, error)) Model {
+func newModel(report jacoco.Report, cfg Config, reloadFn func() (jacoco.Report, error), probeFn func() (bool, error)) Model {
 	m := Model{
 		report:      report,
 		config:      cfg,
@@ -79,6 +81,7 @@ func newModel(report jacoco.Report, cfg Config, reloadFn func() (jacoco.Report, 
 		sortID:      normalizeInitialSort(cfg.Sort),
 		counterType: jacoco.CounterInstruction,
 		reloadFn:    reloadFn,
+		probeFn:     probeFn,
 		width:       100,
 		height:      30,
 		titleStyle: lipgloss.NewStyle().
@@ -101,7 +104,7 @@ func newModel(report jacoco.Report, cfg Config, reloadFn func() (jacoco.Report, 
 }
 
 func (m Model) Init() tea.Cmd {
-	if m.config.Watch && m.reloadFn != nil {
+	if m.reloadFn != nil {
 		return watchTickCmd()
 	}
 	return nil
@@ -115,10 +118,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ensureCursorVisible(m.visibleChildCount())
 		return m, nil
 	case watchTickMsg:
-		if !m.config.Watch || m.reloadFn == nil {
+		if m.reloadFn == nil {
 			return m, nil
 		}
-		return m, tea.Batch(watchReloadCmd(m.reloadFn), watchTickCmd())
+		if m.watchPrompt {
+			return m, watchTickCmd()
+		}
+		if m.config.Watch {
+			return m, tea.Batch(watchReloadCmd(m.reloadFn), watchTickCmd())
+		}
+		if m.probeFn != nil {
+			return m, tea.Batch(watchProbeCmd(m.probeFn), watchTickCmd())
+		}
+		return m, watchTickCmd()
+	case watchProbeMsg:
+		if msg.err != nil {
+			m.watchErr = msg.err.Error()
+			return m, nil
+		}
+		if msg.changed {
+			m.watchPrompt = true
+		}
+		m.watchErr = ""
+		return m, nil
 	case watchReloadMsg:
 		if msg.err != nil {
 			m.watchErr = msg.err.Error()
@@ -126,9 +148,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.report = msg.report
 		m.watchErr = ""
+		m.watchPrompt = false
 		m.stack = []navNode{{kind: nodeReport, cursor: 0, offset: 0}}
 		return m, nil
 	case tea.KeyMsg:
+		if m.watchPrompt {
+			switch strings.ToLower(msg.String()) {
+			case "y", "enter":
+				m.watchPrompt = false
+				return m, watchReloadCmd(m.reloadFn)
+			case "n", "esc":
+				m.watchPrompt = false
+				return m, nil
+			case "q", "ctrl+c":
+				return m, tea.Quit
+			default:
+				return m, nil
+			}
+		}
 		if quit := m.applyKey(msg.String()); quit {
 			return m, tea.Quit
 		}
@@ -343,14 +380,24 @@ func (m Model) View() string {
 		"",
 		m.helpStyle.Render(fmt.Sprintf("sort: %s  counter: %s  filter: %s | ↑/↓ or j/k: move  g/G: jump  Enter: open  b: back  s: sort  c: counter  /: filter  q: quit", m.sortLabel(), m.counterLabel(), m.filterLabel())),
 	}
-	if m.config.Watch {
+	if m.reloadFn != nil {
 		state := "on"
+		if m.watchPrompt {
+			state = "confirm"
+		}
 		if m.watchErr != "" {
 			state = "error"
 		}
-		parts = append(parts, m.helpStyle.Render(fmt.Sprintf("watch: %s (1s polling)", state)))
+		mode := "confirm"
+		if m.config.Watch {
+			mode = "auto"
+		}
+		parts = append(parts, m.helpStyle.Render(fmt.Sprintf("watch: %s (mode: %s, 1s polling)", state, mode)))
 		if m.watchErr != "" {
 			parts = append(parts, m.helpStyle.Render(fmt.Sprintf("watch error: %s", m.watchErr)))
+		}
+		if m.watchPrompt {
+			parts = append(parts, m.helpStyle.Render("report file updated. reload now? (y/Enter: reload, n/Esc: skip)"))
 		}
 	}
 	if m.filterMode {
@@ -366,10 +413,22 @@ type watchReloadMsg struct {
 	err    error
 }
 
+type watchProbeMsg struct {
+	changed bool
+	err     error
+}
+
 func watchTickCmd() tea.Cmd {
 	return tea.Tick(time.Second, func(_ time.Time) tea.Msg {
 		return watchTickMsg{}
 	})
+}
+
+func watchProbeCmd(probeFn func() (bool, error)) tea.Cmd {
+	return func() tea.Msg {
+		changed, err := probeFn()
+		return watchProbeMsg{changed: changed, err: err}
+	}
 }
 
 func watchReloadCmd(reloadFn func() (jacoco.Report, error)) tea.Cmd {
