@@ -27,7 +27,8 @@ jobs:
       - name: Run tests
         run: go test ./...
 
-      - name: Run GoReleaser
+      - name: Run GoReleaser (publish release)
+        if: github.event_name == 'push'
         uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
@@ -35,3 +36,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+      - name: Run GoReleaser (snapshot dry run)
+        if: github.event_name == 'workflow_dispatch'
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: build --snapshot --clean
